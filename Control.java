@@ -21,6 +21,10 @@ public class Control {
 			//catch commands
 			if(cmd.equalsIgnoreCase("new"))
 				createNetwork();
+			else if (cmd.equalsIgnoreCase("print"))
+				printNetwork();
+			else if (cmd.equalsIgnoreCase("weights"))
+				printWeights();
 			else if(cmd.substring(0,4).equalsIgnoreCase("exit"))
 				break;
 			else
@@ -48,6 +52,48 @@ public class Control {
 		
 		//create the neural network
 		network = new NNetwork(numInputs, hiddenLayerSizes, numOutputs);
+		
+	}
+	
+	public static void printNetwork() {
+		
+		if(network != null) 
+			out.println(network);
+		else
+			out.println("Cannot print non-instantiated network.");
+	}
+	
+	public static void printWeights() {
+		
+		if(network != null) {
+			//ask the user to identify which neuron's weights
+			out.println("Which layer? (i for input, o for output, 1-n for hidden layers)");
+			String layer = null, neur = null;
+			int layNum = 0, neurNum = 0;
+			while(layer == null){
+				out.print("");
+				layer = scan.nextLine().substring(0, 1);
+				layNum = Integer.valueOf(layer);
+				if(!(layer == "i" || layer == "o" || (layNum >= 0 && layNum <= network.getNumLayers()))){
+					out.println("Invalid layer number.");
+					layer = null;
+				}
+			}
+			NLayer lay = network.getLayer(layNum);
+			while(neur == null) {
+				out.print("");
+				neur = scan.nextLine();
+				neurNum = Integer.valueOf(neur);
+				if(!(neurNum >= 0 && neurNum <= lay.getSize())){
+					out.println("Invalid neuron number.");
+					neur = null;
+				}
+			}
+			out.println(lay.getNeuron(neurNum).weightsToString());
+		}
+		else
+			out.println("Cannot get weights of non-instantiated network.");
+		
 		
 	}
 	
