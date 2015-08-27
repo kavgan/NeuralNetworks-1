@@ -5,7 +5,7 @@ public class Neuron {
 	private final static double DEFAULT_WEIGHT = 1;
 	private double threshold;
 	private double[] weights; //weights of the inputs (dendrites)
-	private boolean active;
+	private double aLevel; //activation level
 	
 	//default constructor assumes this is input neuron (no dendrites)
 	public Neuron() {
@@ -21,7 +21,7 @@ public class Neuron {
 			weights[i] = DEFAULT_WEIGHT * 2 / numDendrites; //normalize weight based on number of dendrites
 			weights[i] = Math.round(weights[i] * Math.random() * 10.0) / 10.0; //round to nearest tenth
 		}
-		active = false;
+		aLevel = 0;
 		
 	}
 	
@@ -30,20 +30,34 @@ public class Neuron {
 		
 		threshold = activationThreshold;
 		weights = dendriteWeights;
-		active = false;
+		aLevel = 0;
 		
 	}
 	
-	public void activate() {
-		active = true;
+	//evaluates the neuron's activation level given the layer before it
+	public void evaluate(double[] input) {
+		
+		//check for appropriately sized input
+		if(input.length != weights.length)
+			return;
+		
+		//calculate total activation
+		double sum = 0.0;
+		for(int i = 0; i < input.length; i++) {
+			sum += input[i] * weights[i];
+		}
+		
+		//calculate activation level using log-sigmoid function
+		aLevel = 1 / (1 + Math.pow(Math.E, (-sum)));
+		
 	}
 	
 	public void deactivate() {
-		active = false;
+		aLevel = 0.0;
 	}
 	
-	public boolean getIsActive() {
-		return active;
+	public double getActivationLevel() {
+		return aLevel;
 	}
 	
 	public double getThreshold() {
@@ -69,4 +83,22 @@ public class Neuron {
 	public void setWeight(double w, int i) {
 		weights[i] = w;
 	}
+	
+	public String toString() {
+		
+		return "[" + threshold + "]";
+		
+	}
+	
+	public String weightsToString() {
+		
+		String ret = "[";
+		for(int i = 0; i < weights.length; i++) {
+			ret.concat(weights[i] + "");
+			if(i < weights.length - 1)
+				ret.concat(", ");
+		}
+		return ret;
+	}
+	
 }
