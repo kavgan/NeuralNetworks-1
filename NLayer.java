@@ -18,6 +18,24 @@ public class NLayer {
 		
 	}
 	
+	//evaluates the layer, returning each neuron's values
+	public double[] evaluate(double input[]) {
+		
+		//check for appropriately sized input
+		if(input.length != neurons.length)
+			return null;
+		
+		double output[] = new double[neurons.length];
+		
+		//fire each neuron and get activation levels
+		for(int i = 0; i < neurons.length; i++) {
+			neurons[i].evaluate(input);
+			output[i] = neurons[i].getActivationLevel();
+		}
+		
+		return output;
+	}
+	
 	public Neuron getNeuron(int i) {
 		return neurons[i];
 	}
@@ -28,6 +46,18 @@ public class NLayer {
 	
 	public void setNeuron(Neuron n, int i) {
 		neurons[i] = n;
+	}
+	
+	public String toString() {
+		
+		String ret = "";
+		for(int i = 0; i < neurons.length; i++) {
+			ret.concat(neurons[i].toString());
+			if(i < neurons.length - 1)
+				ret.concat(", ");
+		}
+		return ret;
+		
 	}
 	
 }
