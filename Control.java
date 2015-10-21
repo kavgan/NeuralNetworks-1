@@ -1,130 +1,121 @@
-import java.io.PrintStream;
+//The main method and control of neural net creation and operation
+
 import java.util.Scanner;
-import java.util.function.IntPredicate;
 
 public class Control {
 
-	private static Scanner scan = new Scanner(System.in);
-	private static TabbedPrint out = new TabbedPrint();
-	private static NNetwork network; //the neural network being used (assumes only using one at a time)
+	private final static int DEFAULT_BOARD_SIZE = 15;
+	private final static int DEFAULT_SIGHT_RANGE = 5; //the side dimensions of the visible square
+	private final static int[] DEFAULT_HIDDEN_LAYER_SIZES = {100}; //array of hidden layer sizes
+	private final static double PASSIVE_PUNISHMENT = 0.8; //the severity with which the network is encouraged to find gold (lower is more severe)
 	
+	private static Scanner scan = new Scanner(System.in);
+	private static NNetwork network; // the neural network being used (assumes only using one at a time)
+
 	public static void main(String[] args) {
 		
-		String cmd; //the user-entered command
-		
-		//loop until user quits
-		while(true) {
+		network = new NNetwork(2 * (int)(Math.pow(DEFAULT_SIGHT_RANGE, 2)), DEFAULT_HIDDEN_LAYER_SIZES, 5);
+		System.out.println("How many times should the agent play?");
+		int rounds = scan.nextInt();
+		int record = 0; //the longest the computer has lasted
+		for(int i = 0; i < rounds; i++) {
+			//System.out.println("GAME " + i);
+			Board b = new Board(DEFAULT_BOARD_SIZE);
+			int gold = 0;
 			
-			System.out.print("$ ");
-			cmd = scan.nextLine();
-			
-			//catch commands
-			if(cmd.equalsIgnoreCase("new"))
-				createNetwork();
-			else if (cmd.equalsIgnoreCase("print"))
-				printNetwork();
-			else if (cmd.equalsIgnoreCase("weights"))
-				printWeights();
-			else if(cmd.substring(0,4).equalsIgnoreCase("exit"))
-				break;
-			else
-				System.out.println("Command not recognized.");
-			
-		}
-		
-		scan.close();
-		
-	}
-	
-	public static void createNetwork() {
-		
-		//ask the user for the new neural net parameters
-		out.println("How many inputs?");
-		int numInputs = readNumber(0, (x) -> x > 0);
-		out.println("How many hidden layers?");
-		int[] hiddenLayerSizes = new int[readNumber(0, (x) -> x > 0)];
-		for(int i = 0; i < hiddenLayerSizes.length; i++) {
-			out.println("What is the size of hidden layer number " + (i + 1) + "?");
-			hiddenLayerSizes[i] = readNumber(0, (x) -> x > 0); 
-		}
-		out.println("How many outputs?");
-		int numOutputs = readNumber(0, (x) -> x > 0);
-		
-		//create the neural network
-		network = new NNetwork(numInputs, hiddenLayerSizes, numOutputs);
-		
-	}
-	
-	public static void printNetwork() {
-		
-		if(network != null) 
-			out.println(network);
-		else
-			out.println("Cannot print non-instantiated network.");
-	}
-	
-	public static void printWeights() {
-		
-		if(network != null) {
-			//ask the user to identify which neuron's weights
-			out.println("Which layer? (i for input, o for output, 1-n for hidden layers)");
-			String layer = null, neur = null;
-			int layNum = 0, neurNum = 0;
-			while(layer == null){
-				out.print("");
-				layer = scan.nextLine().substring(0, 1);
-				layNum = Integer.valueOf(layer);
-				if(!(layer == "i" || layer == "o" || (layNum >= 0 && layNum <= network.getNumLayers()))){
-					out.println("Invalid layer number.");
-					layer = null;
+			//while the player has neither died nor found all the gold
+			while(b.getPlayerStatus() && !b.foundAllGold()) {
+				
+				Tile[][] v = b.visible((DEFAULT_SIGHT_RANGE - 1) / 2); //side -> distance from middle
+				
+				//plug the neural network into the game
+				double[] inputs = new double[(2 * (int)(Math.pow(DEFAULT_SIGHT_RANGE, 2)))];
+				for(int j = 0; j < 25; j++) {
+					//add monsters to input
+					if(v[j / 5][j % 5].getContent().equals("monster"))
+						inputs[j] = 1.0;
+					else
+						inputs[j] = 0.0;
+					//add gold to input
+					if(v[j / 5][j % 5].getContent().equals("gold"))
+						inputs[j + 25] = 1.0;
+					else
+						inputs[j + 25] = 0.0;
 				}
-			}
-			NLayer lay = network.getLayer(layNum);
-			while(neur == null) {
-				out.print("");
-				neur = scan.nextLine();
-				neurNum = Integer.valueOf(neur);
-				if(!(neurNum >= 0 && neurNum <= lay.getSize())){
-					out.println("Invalid neuron number.");
-					neur = null;
+								
+				double[][] outputs = network.fullEvaluate(inputs); //network evaluates the game state
+				double[] outs = outputs[outputs.length - 1]; //take just the output layer
+				
+				//TODO remove
+				/*for(int j = 0; j < outs.length; j++) {
+					System.out.println("    Output at " + j + ": " + outs[j]);
 				}
+				System.out.println("\n");*/
+				
+				int dir = getGreatestIndex(outs); //find the direction the network picked
+				b.movePlayer(dir); //move in the direction the network picked
+				b.step(); //advance the rest of the board (monsters move)
+				
+				double[] trainer = new double[5]; //the values to train the network with
+				//If the player dies, correct it to not move that way				
+				if(!b.getPlayerStatus()) {
+					//System.out.println("Died on turn " + b.getTurn() + " with " + b.getGoldCount() + " gold.");
+					for(int j = 0; j < 5; j++) {
+						if(j == dir) {
+							trainer[j] = 0.0;
+						}
+						else {
+							trainer[j] = outs[j];
+						}
+					}
+				}
+				//reward network for finding gold
+				else if(b.getGoldCount() > gold) {
+					if(b.foundAllGold())
+						System.out.println("COMPLETED GAME: Computer found all gold in round " + i + " in " + b.getTurn() + " turns.");
+					gold = b.getGoldCount();
+					for(int j = 0; j < 5; j++) {
+						if(j == dir) {
+							trainer[j] = 1.0;
+						}
+						else {
+							trainer[j] = outs[j];
+						}
+					}
+				}
+				//poke the network for not accomplishing anything
+				else {
+					for(int j = 0; j < 5; j++) {
+						if(j == dir) {
+							trainer[j] = outs[j] * PASSIVE_PUNISHMENT;
+						}
+						else {
+							trainer[j] = outs[j];
+						}
+					}
+				}				
+				network.backProp(outputs, trainer); //train the network with the backpropagation algorithm
 			}
-			out.println(lay.getNeuron(neurNum).weightsToString());
-		}
-		else
-			out.println("Cannot get weights of non-instantiated network.");
-		
-		
-	}
-	
-	//gets a number from the user that fulfills an IntPredicate (lambda expression)
-	public static int readNumber(int defaultNum, IntPredicate p) {
-		
-		while(!p.test(defaultNum)) {
-			try{
-				out.print("");
-				defaultNum = scan.nextInt();
-			} catch(Exception e) {
-				out.println("Please enter a number");
+			
+			if(b.getTurn() > record) {
+				record = b.getTurn();
+				System.out.println("NEW RECORD: Computer lasted " + record + " turns in round " + i + " and found " + gold + " gold.");
 			}
-			if(!p.test(defaultNum))
-				out.println("Invalid number.");
 		}
-		
-		return defaultNum;
 	}
-	
-	//formats with a two space indent
-	private static class TabbedPrint extends PrintStream {
 
-		public TabbedPrint() {
-			super(System.out);
-		}
-		
-		public void print(String s) {
-			super.print("  ".concat(s));
-		}
-		
-	}
 	
+	//finds the position in an array with the highest value
+	private static int getGreatestIndex(double[] d) {
+		double max = d[0];
+		int maxIndex = 0;
+		for(int i = 1; i < d.length; i++) {
+			if(d[i] > max) {
+				max = d[i];
+				maxIndex = i;
+			}
+		}
+		return maxIndex;
+	}
+
 }
